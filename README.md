@@ -2,10 +2,12 @@
 
 Local markdown worklog helpers for developer workflows.
 
-This initial package release establishes the public package name, metadata,
-typed Python package layout, command entry point, CI, and PyPI trusted
-publishing path. The worklog creation and companion-note workflow will be added
-in follow-up releases.
+`worklogs` creates dated markdown files under a scope, date folder, and compact
+filename:
+
+```text
+~/worklog/<scope>/YYYY/MM/DD/HHMM--kind--project--slug.md
+```
 
 ## Installation
 
@@ -27,8 +29,86 @@ python -m pip install -e ".[dev]"
 
 ## Usage
 
+Check the installed version:
+
 ```bash
 worklogs --version
+```
+
+Create a plan with explicit fields:
+
+```bash
+worklogs new --scope work --kind plan --project backend-api --slug improve-deploy-notes
+```
+
+Create the same plan with the fast filename-shaped token:
+
+```bash
+worklogs new plan--backend-api--improve-deploy-notes --scope work
+```
+
+Plans create a linked companion execution note by default:
+
+```text
+HHMM--plan--backend-api--improve-deploy-notes.md
+HHMM--note--backend-api--improve-deploy-notes-execution-log.md
+```
+
+Create a standalone note:
+
+```bash
+worklogs new note--personal-site--theme-ideas --scope personal
+```
+
+Preview the generated paths and markdown without writing files:
+
+```bash
+worklogs new plan--backend-api--improve-deploy-notes --scope work --dry-run
+```
+
+Print created paths for scripts:
+
+```bash
+worklogs new note--personal-site--theme-ideas --scope personal --print-path
+```
+
+Supported kinds:
+
+```text
+plan
+note
+investigation
+codereview
+```
+
+## Config
+
+Optional defaults live in:
+
+```text
+~/.config/worklogs/config.toml
+```
+
+Example:
+
+```toml
+root = "~/worklog"
+default_scope = "work"
+timezone = "America/Toronto"
+```
+
+Resolution order:
+
+1. CLI flags
+2. environment variables: `WORKLOG_ROOT`, `WORKLOG_SCOPE`,
+   `WORKLOG_TIMEZONE`
+3. config file
+4. package defaults
+
+With `default_scope` configured, the fast path can omit `--scope`:
+
+```bash
+worklogs new plan--backend-api--improve-deploy-notes
 ```
 
 For shorter personal shell usage, add a local alias:
@@ -89,9 +169,9 @@ Environment name: pypi
 Create a GitHub Release for the version in [`pyproject.toml`](pyproject.toml):
 
 ```bash
-gh release create v0.1.0 \
-  --title "v0.1.0" \
-  --notes "Initial package metadata release."
+gh release create v0.2.0 \
+  --title "v0.2.0" \
+  --notes "Add worklog file creation commands."
 ```
 
 Publishing is release-driven on purpose: normal pushes and pull requests build

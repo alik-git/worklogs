@@ -1,7 +1,13 @@
 # API
 
-`worklogs` does not expose a stable public Python API yet.
+`worklogs` does not expose a stable public Python API yet. The supported surface
+is the `worklogs` command-line interface.
 
-The initial release reserves the package name and establishes the typed package,
-command entry point, CI, and release pipeline. Public helpers will be documented
-here once the worklog creation workflow is implemented.
+Use `worklogs new` to create dated markdown worklog files:
+
+```bash
+worklogs new plan--backend-api--improve-deploy-notes --scope work
+```
+
+Public Python helpers will be documented here if the package grows a stable API
+outside the CLI.
