@@ -1,15 +1,7 @@
 # API
 
-Document the package's public Python API here.
+`worklogs` does not expose a stable public Python API yet.
 
-## `do_useful_thing`
-
-```python
-import mypackage
-
-result = mypackage.do_useful_thing("world")
-```
-
-`do_useful_thing` is the starter public function exposed by this template.
-Replace it with the functions or classes that should make up the package's
-public API.
+The initial release reserves the package name and establishes the typed package,
+command entry point, CI, and release pipeline. Public helpers will be documented
+here once the worklog creation workflow is implemented.
