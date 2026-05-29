@@ -72,6 +72,41 @@ Print created paths for scripts:
 worklogs new note--personal-site--theme-ideas --scope personal --print-path
 ```
 
+Create a dated project workset directory:
+
+```bash
+worklogs workset new backend-api-refactor --worksets-root ~/worksets
+```
+
+Create a dated workset under organizer folders:
+
+```bash
+worklogs workset new release-tools/python-packaging/worklogs-0.2.1 \
+  --worksets-root ~/worksets
+```
+
+Worksets are created under:
+
+```text
+<worksets-root>/YYYY/MM/DD/<workset-path>/
+```
+
+Preview a workset path without creating it:
+
+```bash
+worklogs workset new release-tools/python-packaging/worklogs-0.2.1 \
+  --worksets-root ~/worksets \
+  --dry-run
+```
+
+Print only the created path for scripts:
+
+```bash
+worklogs workset new backend-api-refactor \
+  --worksets-root ~/worksets \
+  --print-path
+```
+
 Supported kinds:
 
 ```text
@@ -95,13 +130,14 @@ Example:
 root = "~/worklog"
 default_scope = "work"
 timezone = "America/Toronto"
+worksets_root = "~/worksets"
 ```
 
 Resolution order:
 
 1. CLI flags
 2. environment variables: `WORKLOG_ROOT`, `WORKLOG_SCOPE`,
-   `WORKLOG_TIMEZONE`
+   `WORKLOG_TIMEZONE`, `WORKLOG_WORKSETS_ROOT`
 3. config file
 4. package defaults
 
@@ -109,6 +145,12 @@ With `default_scope` configured, the fast path can omit `--scope`:
 
 ```bash
 worklogs new plan--backend-api--improve-deploy-notes
+```
+
+With `worksets_root` configured, the workset path can omit `--worksets-root`:
+
+```bash
+worklogs workset new backend-api-refactor
 ```
 
 For shorter personal shell usage, add a local alias:
@@ -169,9 +211,9 @@ Environment name: pypi
 Create a GitHub Release for the version in [`pyproject.toml`](pyproject.toml):
 
 ```bash
-gh release create v0.2.0 \
-  --title "v0.2.0" \
-  --notes "Add worklog file creation commands."
+gh release create v0.2.1 \
+  --title "v0.2.1" \
+  --notes "Add dated workset directory creation."
 ```
 
 Publishing is release-driven on purpose: normal pushes and pull requests build

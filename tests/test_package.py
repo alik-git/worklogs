@@ -14,8 +14,11 @@ from worklogs.cli import (
     WorklogEntry,
     WorklogIdentity,
     WorklogsError,
+    WorksetConfig,
     _build_entries,
+    _build_workset_path,
     _parse_identity_token,
+    _parse_workset_path,
     _write_entries,
     main,
 )
@@ -26,7 +29,7 @@ if TYPE_CHECKING:
 
 def test_version_is_exposed() -> None:
     """Verify the package exposes its current version."""
-    assert worklogs.__version__ == "0.2.0"
+    assert worklogs.__version__ == "0.2.1"
 
 
 def test_cli_accepts_no_arguments() -> None:
@@ -210,6 +213,185 @@ def test_dry_run_writes_nothing(
     assert not root.exists()
 
 
+def test_workset_new_uses_config_root_and_explicit_date(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Verify workset creation uses the configured root and dated layout."""
+    worksets_root = tmp_path / "Projects" / "worksets"
+    _write_config(
+        tmp_path,
+        monkeypatch,
+        root=tmp_path / "worklog",
+        default_scope="work",
+        worksets_root=worksets_root,
+    )
+
+    assert (
+        main(
+            [
+                "workset",
+                "new",
+                "release-tools/worklogs-0.2.1",
+                "--date",
+                "2026-05-29",
+            ]
+        )
+        == 0
+    )
+
+    created_path = (
+        worksets_root / "2026" / "05" / "29" / "release-tools" / "worklogs-0.2.1"
+    )
+    assert created_path.is_dir()
+    assert f"Created workset directory: {created_path}" in capsys.readouterr().out
+
+
+def test_workset_new_dry_run_writes_nothing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Verify workset dry-run prints the intended path without writing."""
+    _isolate_home(tmp_path, monkeypatch)
+    worksets_root = tmp_path / "worksets"
+
+    assert (
+        main(
+            [
+                "workset",
+                "new",
+                "release-tools/python-packaging/worklogs-0.2.1",
+                "--worksets-root",
+                str(worksets_root),
+                "--date",
+                "2026-05-29",
+                "--dry-run",
+            ]
+        )
+        == 0
+    )
+
+    output = capsys.readouterr().out
+    assert "Would create workset:" in output
+    assert (
+        str(
+            worksets_root
+            / "2026"
+            / "05"
+            / "29"
+            / "release-tools"
+            / "python-packaging"
+            / "worklogs-0.2.1"
+        )
+        in output
+    )
+    assert not worksets_root.exists()
+
+
+def test_workset_new_print_path_is_script_friendly(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Verify --print-path prints only the created workset path."""
+    _isolate_home(tmp_path, monkeypatch)
+    worksets_root = tmp_path / "worksets"
+
+    assert (
+        main(
+            [
+                "workset",
+                "new",
+                "worklogs-0.2.1",
+                "--worksets-root",
+                str(worksets_root),
+                "--date",
+                "2026-05-29",
+                "--print-path",
+            ]
+        )
+        == 0
+    )
+
+    expected_path = worksets_root / "2026" / "05" / "29" / "worklogs-0.2.1"
+    assert capsys.readouterr().out == f"{expected_path}\n"
+    assert expected_path.is_dir()
+
+
+def test_workset_new_refuses_existing_non_empty_directory(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Verify workset creation refuses to reuse non-empty directories."""
+    _isolate_home(tmp_path, monkeypatch)
+    worksets_root = tmp_path / "worksets"
+    existing_path = worksets_root / "2026" / "05" / "29" / "worklogs-0.2.1"
+    existing_path.mkdir(parents=True)
+    (existing_path / "README.md").write_text("existing\n", encoding="utf-8")
+
+    assert (
+        main(
+            [
+                "workset",
+                "new",
+                "worklogs-0.2.1",
+                "--worksets-root",
+                str(worksets_root),
+                "--date",
+                "2026-05-29",
+            ]
+        )
+        == 2
+    )
+    assert "existing non-empty workset directory" in capsys.readouterr().err
+
+
+def test_workset_new_requires_configured_root(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Verify workset creation does not guess a local machine default."""
+    _isolate_home(tmp_path, monkeypatch)
+
+    assert main(["workset", "new", "worklogs-0.2.1", "--date", "2026-05-29"]) == 2
+    assert "worksets root is required" in capsys.readouterr().err
+
+
+def test_parse_workset_path_rejects_unsafe_components() -> None:
+    """Verify workset path parsing rejects absolute or escaping paths."""
+    for value in (
+        "/absolute/workset",
+        "release-tools/../workset",
+        "release-tools//workset",
+    ):
+        with pytest.raises(WorklogsError):
+            _parse_workset_path(value)
+
+
+def test_build_workset_path_renders_date_folders(tmp_path: Path) -> None:
+    """Verify workset paths include YYYY/MM/DD before organizer folders."""
+    workset_path = _build_workset_path(
+        config=WorksetConfig(root=tmp_path / "worksets", timezone=ZoneInfo("UTC")),
+        workset_date=datetime(2026, 5, 29, tzinfo=ZoneInfo("UTC")).date(),
+        path_parts=("release-tools", "worklogs-0.2.1"),
+    )
+
+    assert (
+        workset_path
+        == tmp_path
+        / "worksets"
+        / "2026"
+        / "05"
+        / "29"
+        / "release-tools"
+        / "worklogs-0.2.1"
+    )
+
+
 def test_scope_is_required_without_config_or_flag(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -249,16 +431,19 @@ def _write_config(
     *,
     root: Path,
     default_scope: str,
+    worksets_root: Path | None = None,
 ) -> None:
     home = _isolate_home(tmp_path, monkeypatch)
     config_path = home / ".config" / "worklogs" / "config.toml"
     config_path.parent.mkdir(parents=True)
-    config_path.write_text(
-        f'root = "{root}"\n'
-        f'default_scope = "{default_scope}"\n'
-        'timezone = "America/Toronto"\n',
-        encoding="utf-8",
-    )
+    lines = [
+        f'root = "{root}"',
+        f'default_scope = "{default_scope}"',
+        'timezone = "America/Toronto"',
+    ]
+    if worksets_root is not None:
+        lines.append(f'worksets_root = "{worksets_root}"')
+    config_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def _isolate_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
@@ -268,4 +453,5 @@ def _isolate_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.delenv("WORKLOG_ROOT", raising=False)
     monkeypatch.delenv("WORKLOG_SCOPE", raising=False)
     monkeypatch.delenv("WORKLOG_TIMEZONE", raising=False)
+    monkeypatch.delenv("WORKLOG_WORKSETS_ROOT", raising=False)
     return home
