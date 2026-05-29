@@ -8,7 +8,7 @@ import re
 import sys
 import tomllib
 from dataclasses import dataclass
-from datetime import UTC, datetime, tzinfo
+from datetime import UTC, date, datetime, tzinfo
 from pathlib import Path
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -52,6 +52,14 @@ class WorklogConfig:
 
     root: Path
     scope: str
+    timezone: tzinfo
+
+
+@dataclass(frozen=True)
+class WorksetConfig:
+    """Resolved user defaults for workset directory creation."""
+
+    root: Path
     timezone: tzinfo
 
 
@@ -122,6 +130,51 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="print created path or paths",
     )
+
+    workset_parser = subparsers.add_parser(
+        "workset",
+        help="create and maintain project workset directories",
+        description="Create and maintain project workset directories.",
+    )
+    workset_subparsers = workset_parser.add_subparsers(
+        dest="workset_command",
+        required=True,
+    )
+    workset_new_parser = workset_subparsers.add_parser(
+        "new",
+        help="create a dated project workset directory",
+        description="Create a dated project workset directory.",
+    )
+    workset_new_parser.add_argument(
+        "path",
+        metavar="PATH",
+        help="relative workset path under YYYY/MM/DD, for example app/refactor",
+    )
+    workset_new_parser.add_argument(
+        "--worksets-root",
+        metavar="PATH",
+        help="root directory for dated workset folders",
+    )
+    workset_new_parser.add_argument(
+        "--timezone",
+        metavar="ZONE",
+        help="IANA timezone name used when choosing today's date",
+    )
+    workset_new_parser.add_argument(
+        "--date",
+        metavar="YYYY-MM-DD",
+        help="explicit date for reproducible workset creation",
+    )
+    workset_new_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="print the intended path without creating it",
+    )
+    workset_new_parser.add_argument(
+        "--print-path",
+        action="store_true",
+        help="print only the created or intended path",
+    )
     return parser
 
 
@@ -137,6 +190,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         if args.command == "new":
             return _run_new(args)
+        if args.command == "workset" and args.workset_command == "new":
+            return _run_workset_new(args)
     except WorklogsError as error:
         print(f"worklogs: error: {error}", file=sys.stderr)
         return 2
@@ -173,6 +228,34 @@ def _run_new(args: argparse.Namespace) -> int:
     else:
         noun = "file" if len(entries) == 1 else "files"
         print(f"Created {len(entries)} worklog {noun}.")
+    return 0
+
+
+def _run_workset_new(args: argparse.Namespace) -> int:
+    config = _resolve_workset_config(args, os.environ)
+    workset_date = _resolve_workset_date(args.date, config.timezone)
+    path_parts = _parse_workset_path(args.path)
+    workset_path = _build_workset_path(
+        config=config,
+        workset_date=workset_date,
+        path_parts=path_parts,
+    )
+
+    if args.dry_run:
+        if args.print_path:
+            print(workset_path)
+        else:
+            print("Would create workset:")
+            print(workset_path)
+        return 0
+
+    created = _create_workset_directory(workset_path)
+    if args.print_path:
+        print(workset_path)
+    elif created:
+        print(f"Created workset directory: {workset_path}")
+    else:
+        print(f"Workset directory already exists and is empty: {workset_path}")
     return 0
 
 
@@ -267,6 +350,35 @@ def _resolve_config(
     )
 
 
+def _resolve_workset_config(
+    args: argparse.Namespace,
+    environment: Mapping[str, str],
+) -> WorksetConfig:
+    file_config = _load_config()
+
+    root_value = _first_string(
+        args.worksets_root,
+        environment.get("WORKLOG_WORKSETS_ROOT"),
+        file_config.get("worksets_root"),
+    )
+    if root_value is None:
+        msg = (
+            "worksets root is required; set --worksets-root, "
+            "WORKLOG_WORKSETS_ROOT, or worksets_root in config"
+        )
+        raise WorklogsError(msg)
+
+    timezone_value = _first_string(
+        args.timezone,
+        environment.get("WORKLOG_TIMEZONE"),
+        file_config.get("timezone"),
+    )
+    return WorksetConfig(
+        root=Path(root_value).expanduser(),
+        timezone=_resolve_timezone(timezone_value),
+    )
+
+
 def _load_config() -> dict[str, str]:
     config_path = CONFIG_PATH.expanduser()
     if not config_path.exists():
@@ -283,7 +395,7 @@ def _load_config() -> dict[str, str]:
         raise WorklogsError(msg) from error
 
     config: dict[str, str] = {}
-    for key in ("root", "default_scope", "timezone"):
+    for key in ("root", "default_scope", "timezone", "worksets_root"):
         value = raw_config.get(key)
         if value is None:
             continue
@@ -309,6 +421,77 @@ def _resolve_timezone(timezone_name: str | None) -> tzinfo:
     except ZoneInfoNotFoundError as error:
         msg = f"unknown timezone {timezone_name!r}"
         raise WorklogsError(msg) from error
+
+
+def _resolve_workset_date(value: str | None, timezone: tzinfo) -> date:
+    if value is None:
+        return datetime.now(UTC).astimezone(timezone).date()
+    try:
+        return date.fromisoformat(value)
+    except ValueError as error:
+        msg = f"invalid date {value!r}; expected YYYY-MM-DD"
+        raise WorklogsError(msg) from error
+
+
+def _parse_workset_path(value: str) -> tuple[str, ...]:
+    if not value:
+        msg = "workset path cannot be empty"
+        raise WorklogsError(msg)
+    if Path(value).is_absolute():
+        msg = "workset path must be relative"
+        raise WorklogsError(msg)
+
+    parts = tuple(value.split("/"))
+    for part in parts:
+        if part in {"", ".", ".."}:
+            msg = "workset path cannot contain empty, '.', or '..' components"
+            raise WorklogsError(msg)
+        if not SLUG_PATTERN.fullmatch(part):
+            msg = (
+                "workset path components must start with a lowercase letter or "
+                "digit and contain only lowercase letters, digits, dots, "
+                "underscores, or hyphens"
+            )
+            raise WorklogsError(msg)
+    return parts
+
+
+def _build_workset_path(
+    *,
+    config: WorksetConfig,
+    workset_date: date,
+    path_parts: Sequence[str],
+) -> Path:
+    return (
+        config.root
+        / f"{workset_date:%Y}"
+        / f"{workset_date:%m}"
+        / f"{workset_date:%d}"
+        / Path(*path_parts)
+    )
+
+
+def _create_workset_directory(path: Path) -> bool:
+    if path.exists():
+        if not path.is_dir():
+            msg = f"workset path exists but is not a directory: {path}"
+            raise WorklogsError(msg)
+        try:
+            has_contents = next(path.iterdir(), None) is not None
+        except OSError as error:
+            msg = f"could not inspect existing workset directory {path}: {error}"
+            raise WorklogsError(msg) from error
+        if has_contents:
+            msg = f"refusing to use existing non-empty workset directory: {path}"
+            raise WorklogsError(msg)
+        return False
+
+    try:
+        path.mkdir(parents=True)
+    except OSError as error:
+        msg = f"could not create workset directory {path}: {error}"
+        raise WorklogsError(msg) from error
+    return True
 
 
 def _build_entries(
