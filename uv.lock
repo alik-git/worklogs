@@ -39,18 +39,6 @@ wheels = [
 ]
 
 [[package]]
-name = "colorlog"
-version = "6.10.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "colorama", marker = "sys_platform == 'win32'" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/a2/61/f083b5ac52e505dfc1c624eafbf8c7589a0d7f32daa398d2e7590efa5fda/colorlog-6.10.1.tar.gz", hash = "sha256:eb4ae5cb65fe7fec7773c2306061a8e63e02efc2c72eba9d27b0fa23c94f1321", size = 17162, upload-time = "2025-10-16T16:14:11.978Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/6d/c1/e419ef3723a074172b68aaa89c9f3de486ed4c2399e2dbd8113a4fdcaf9e/colorlog-6.10.1-py3-none-any.whl", hash = "sha256:2d7e8348291948af66122cff006c9f8da6255d224e7cf8e37d8de2df3bad8c9c", size = 11743, upload-time = "2025-10-16T16:14:10.512Z" },
-]
-
-[[package]]
 name = "distlib"
 version = "0.4.0"
 source = { registry = "https://pypi.org/simple" }
@@ -158,34 +146,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/7f/f9/bfb32ae428aa75c0c533915622176f0a17d6da7b72b5a3c6363685914f70/librt-0.9.0-cp314-cp314t-win_amd64.whl", hash = "sha256:f162af66a2ed3f7d1d161a82ca584efd15acd9c1cff190a373458c32f7d42118", size = 60044, upload-time = "2026-04-09T16:06:06.398Z" },
     { url = "https://files.pythonhosted.org/packages/aa/47/7d70414bcdbb3bc1f458a8d10558f00bbfdb24e5a11740fc8197e12c3255/librt-0.9.0-cp314-cp314t-win_arm64.whl", hash = "sha256:a4b25c6c25cac5d0d9d6d6da855195b254e0021e513e0249f0e3b444dc6e0e61", size = 50009, upload-time = "2026-04-09T16:06:07.995Z" },
 ]
-
-[[package]]
-name = "mypackage"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "colorlog" },
-]
-
-[package.optional-dependencies]
-dev = [
-    { name = "build" },
-    { name = "mypy" },
-    { name = "pre-commit" },
-    { name = "pytest" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "build", marker = "extra == 'dev'", specifier = ">=1.2" },
-    { name = "colorlog", specifier = ">=6.10" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.15" },
-    { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.11" },
-]
-provides-extras = ["dev"]
 
 [[package]]
 name = "mypy"
@@ -457,3 +417,27 @@ sdist = { url = "https://files.pythonhosted.org/packages/0c/98/3a7e644e19cb26133
 wheels = [
     { url = "https://files.pythonhosted.org/packages/27/8d/edd0bd910ff803c308ee9a6b7778621af0d10252219ad9f19ef4d4982a61/virtualenv-21.2.4-py3-none-any.whl", hash = "sha256:29d21e941795206138d0f22f4e45ff7050e5da6c6472299fb7103318763861ac", size = 5831232, upload-time = "2026-04-14T22:15:29.342Z" },
 ]
+
+[[package]]
+name = "worklogs"
+version = "0.1.0"
+source = { editable = "." }
+
+[package.optional-dependencies]
+dev = [
+    { name = "build" },
+    { name = "mypy" },
+    { name = "pre-commit" },
+    { name = "pytest" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "build", marker = "extra == 'dev'", specifier = ">=1.2" },
+    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.15" },
+    { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.11" },
+]
+provides-extras = ["dev"]
