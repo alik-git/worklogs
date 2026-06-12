@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "worklogs"
-version = "0.2.1"
+version = "0.3.0"
 description = "Local markdown worklog helpers for developer workflows."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -146,3 +146,7 @@ disable_error_code = ["import-untyped"]
 # Make local and CI output easier to read and easier to suppress precisely.
 show_error_codes = true
 pretty = true
+
+[[tool.mypy.overrides]]
+module = "workset.*"
+ignore_missing_imports = true
