@@ -5,10 +5,11 @@ from __future__ import annotations
 import argparse
 import os
 import re
+import subprocess
 import sys
 import tomllib
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, tzinfo
+from datetime import UTC, datetime, tzinfo
 from pathlib import Path
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -19,7 +20,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
 VALID_KINDS = frozenset({"plan", "note", "investigation", "codereview"})
-SLUG_PATTERN = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
+NAME_PATTERN = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
 CONFIG_PATH = Path("~/.config/worklogs/config.toml")
 
 GENERIC_TIMEZONE_LABELS = {
@@ -41,9 +42,8 @@ class WorklogsError(Exception):
 class WorklogIdentity:
     """The compact identity fields used to render a worklog filename."""
 
+    name: str
     kind: str
-    project: str
-    slug: str
 
 
 @dataclass(frozen=True)
@@ -53,14 +53,7 @@ class WorklogConfig:
     root: Path
     scope: str
     timezone: tzinfo
-
-
-@dataclass(frozen=True)
-class WorksetConfig:
-    """Resolved user defaults for workset directory creation."""
-
-    root: Path
-    timezone: tzinfo
+    worksets_root: Path | None
 
 
 @dataclass(frozen=True)
@@ -72,109 +65,61 @@ class WorklogEntry:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Build the command-line parser."""
+    """Build the command-line argument parser."""
     parser = argparse.ArgumentParser(
         prog="worklogs",
         description="Create and maintain local worklog files.",
     )
     parser.add_argument(
-        "--version",
-        action="version",
-        version=f"%(prog)s {__version__}",
+        "--version", action="version", version=f"%(prog)s {__version__}"
     )
 
-    subparsers = parser.add_subparsers(dest="command")
-    new_parser = subparsers.add_parser(
-        "new",
-        help="create a dated markdown worklog file",
-        description="Create a dated markdown worklog file.",
-    )
-    new_parser.add_argument(
+    sub = parser.add_subparsers(dest="command")
+
+    # worklogs new
+    new = sub.add_parser("new", help="create a dated worklog file")
+    new.add_argument(
         "identity",
         nargs="?",
-        metavar="KIND--PROJECT--SLUG",
-        help="compact identity token, for example plan--backend-api--deploy-notes",
+        metavar="NAME--KIND",
+        help="compact identity token, e.g. leansim2sim--plan",
     )
-    new_parser.add_argument("--root", metavar="PATH", help="worklog root directory")
-    new_parser.add_argument("--scope", metavar="NAME", help="worklog scope")
-    new_parser.add_argument("--timezone", metavar="ZONE", help="IANA timezone name")
-    new_parser.add_argument("--kind", choices=sorted(VALID_KINDS), help="worklog kind")
-    new_parser.add_argument("--project", help="project slug")
-    new_parser.add_argument("--slug", help="work item slug")
-    new_parser.add_argument(
-        "--link",
+    new.add_argument("--name", help="work item name slug")
+    new.add_argument("--kind", choices=sorted(VALID_KINDS))
+    new.add_argument("--root", metavar="PATH")
+    new.add_argument("--scope", metavar="NAME")
+    new.add_argument("--project", metavar="NAME", help="project label for frontmatter")
+    new.add_argument("--timezone", metavar="ZONE")
+    new.add_argument("--link", action="append", default=[], metavar="VALUE")
+    new.add_argument("--folder", action="append", default=[], metavar="PATH")
+    new.add_argument(
+        "--workset",
         action="append",
         default=[],
-        metavar="VALUE",
-        help="frontmatter link; repeat for multiple links",
+        metavar="REPO:BRANCH",
+        help="create a git workset alongside the plan; repeat for multiple repos",
     )
-    new_parser.add_argument(
-        "--folder",
-        action="append",
-        default=[],
-        metavar="PATH",
-        help="frontmatter folder; repeat for multiple folders",
-    )
-    new_parser.add_argument(
-        "--no-companion",
-        action="store_true",
-        help="for plan files, skip the companion execution note",
-    )
-    new_parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="print target paths and rendered bodies without writing files",
-    )
-    new_parser.add_argument(
-        "--print-path",
-        action="store_true",
-        help="print created path or paths",
-    )
+    new.add_argument("--no-companion", action="store_true")
+    new.add_argument("--dry-run", action="store_true")
+    new.add_argument("--print-path", action="store_true")
 
-    workset_parser = subparsers.add_parser(
-        "workset",
-        help="create and maintain project workset directories",
-        description="Create and maintain project workset directories.",
+    # worklogs workset
+    wset = sub.add_parser("workset", help="attach a git workset to an existing plan")
+    wset.add_argument(
+        "name", metavar="NAME", help="plan name slug to attach workset to"
     )
-    workset_subparsers = workset_parser.add_subparsers(
-        dest="workset_command",
-        required=True,
-    )
-    workset_new_parser = workset_subparsers.add_parser(
-        "new",
-        help="create a dated project workset directory",
-        description="Create a dated project workset directory.",
-    )
-    workset_new_parser.add_argument(
-        "path",
-        metavar="PATH",
-        help="relative workset path under YYYY/MM/DD, for example app/refactor",
-    )
-    workset_new_parser.add_argument(
-        "--worksets-root",
-        metavar="PATH",
-        help="root directory for dated workset folders",
-    )
-    workset_new_parser.add_argument(
-        "--timezone",
-        metavar="ZONE",
-        help="IANA timezone name used when choosing today's date",
-    )
-    workset_new_parser.add_argument(
-        "--date",
-        metavar="YYYY-MM-DD",
-        help="explicit date for reproducible workset creation",
-    )
-    workset_new_parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="print the intended path without creating it",
-    )
-    workset_new_parser.add_argument(
-        "--print-path",
-        action="store_true",
-        help="print only the created or intended path",
-    )
+    wset.add_argument("repo_specs", nargs="+", metavar="REPO:BRANCH")
+    wset.add_argument("--root", metavar="PATH")
+    wset.add_argument("--worksets-root", metavar="PATH")
+    wset.add_argument("--no-env", action="store_true")
+    wset.add_argument("--no-smoke", action="store_true")
+
+    # worklogs find
+    find = sub.add_parser("find", help="search worklog files by keyword")
+    find.add_argument("query", metavar="QUERY")
+    find.add_argument("--root", metavar="PATH")
+    find.add_argument("--scope", metavar="NAME")
+
     return parser
 
 
@@ -190,8 +135,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         if args.command == "new":
             return _run_new(args)
-        if args.command == "workset" and args.workset_command == "new":
-            return _run_workset_new(args)
+        if args.command == "workset":
+            return _run_workset(args)
+        if args.command == "find":
+            return _run_find(args)
     except WorklogsError as error:
         print(f"worklogs: error: {error}", file=sys.stderr)
         return 2
@@ -201,17 +148,19 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 def _run_new(args: argparse.Namespace) -> int:
+    """Handle ``worklogs new``."""
     identity = _resolve_identity(args)
     config = _resolve_config(args, os.environ)
+
     if args.no_companion and identity.kind != "plan":
-        msg = "--no-companion only applies to plan worklogs"
-        raise WorklogsError(msg)
+        raise WorklogsError("--no-companion only applies to plan worklogs")
 
     now = datetime.now(UTC).astimezone(config.timezone)
     entries = _build_entries(
         identity=identity,
         config=config,
         now=now,
+        project=args.project or "",
         links=tuple(args.link),
         folders=tuple(args.folder),
         create_companion=not args.no_companion,
@@ -219,194 +168,276 @@ def _run_new(args: argparse.Namespace) -> int:
 
     if args.dry_run:
         _print_dry_run(entries)
-        return 0
-
-    _write_entries(entries)
-    if args.print_path:
-        for entry in entries:
-            print(entry.path)
     else:
-        noun = "file" if len(entries) == 1 else "files"
-        print(f"Created {len(entries)} worklog {noun}.")
-    return 0
-
-
-def _run_workset_new(args: argparse.Namespace) -> int:
-    config = _resolve_workset_config(args, os.environ)
-    workset_date = _resolve_workset_date(args.date, config.timezone)
-    path_parts = _parse_workset_path(args.path)
-    workset_path = _build_workset_path(
-        config=config,
-        workset_date=workset_date,
-        path_parts=path_parts,
-    )
-
-    if args.dry_run:
+        _write_entries(entries)
         if args.print_path:
-            print(workset_path)
+            for entry in entries:
+                print(entry.path)
         else:
-            print("Would create workset:")
-            print(workset_path)
-        return 0
+            noun = "file" if len(entries) == 1 else "files"
+            print(f"Created {len(entries)} worklog {noun}.")
 
-    created = _create_workset_directory(workset_path)
-    if args.print_path:
-        print(workset_path)
-    elif created:
-        print(f"Created workset directory: {workset_path}")
-    else:
-        print(f"Workset directory already exists and is empty: {workset_path}")
+    if args.workset and not args.dry_run:
+        _create_workset_for_plan(
+            identity=identity,
+            config=config,
+            plan_path=entries[0].path,
+            repo_specs=args.workset,
+        )
+
     return 0
+
+
+def _run_workset(args: argparse.Namespace) -> int:
+    """Handle ``worklogs workset`` — attach a git workset to an existing plan."""
+    _require_workset_package()
+    from workset import create_workset
+
+    config = _resolve_config(args, os.environ)
+    worksets_root = _resolve_worksets_root(config)
+    plan = _find_plan_by_name(args.name, config.root)
+
+    day_dir = plan.parent
+    year, month, day = day_dir.parts[-3], day_dir.parts[-2], day_dir.parts[-1]
+    dest = worksets_root / year / month / day / args.name
+
+    result = create_workset(
+        slug=args.name,
+        repo_specs=args.repo_specs,
+        dest=dest,
+        no_env=args.no_env,
+        no_smoke=args.no_smoke,
+    )
+    _print_workset_result(result)
+    return 0 if result.ok else 1
+
+
+def _run_find(args: argparse.Namespace) -> int:
+    """Handle ``worklogs find`` — search worklog body and filenames."""
+    config = _resolve_config(args, os.environ)
+    search_root = config.root / args.scope if args.scope else config.root
+
+    name_matches = sorted(
+        p
+        for p in search_root.rglob("*.md")
+        if args.query.lower() in p.name.lower()
+        and "gitignored_artifacts" not in p.parts
+    )
+    if name_matches:
+        print("Filename matches:")
+        for p in name_matches:
+            print(f"  {p}")
+        print()
+
+    rg_result = subprocess.run(  # noqa: S603
+        [  # noqa: S607
+            "rg",
+            "--heading",
+            "--line-number",
+            "--color",
+            "auto",
+            "--glob",
+            "*.md",
+            "--glob",
+            "!gitignored_artifacts",
+            "-i",
+            args.query,
+            str(search_root),
+        ],
+        check=False,
+    )
+    return rg_result.returncode if not name_matches else 0
+
+
+def _find_plan_by_name(name: str, root: Path) -> Path:
+    """Find a plan file by name slug, erroring on zero or multiple matches."""
+    pattern = f"*/*/*/*/[0-9][0-9][0-9][0-9]--{name}--plan.md"
+    matches = sorted(root.glob(pattern))
+    if not matches:
+        raise WorklogsError(
+            f"no plan found for name {name!r} under {root}\n"
+            f"Create one with: worklogs new {name}--plan",
+        )
+    if len(matches) > 1:
+        listed = "\n".join(f"  {p}" for p in matches)
+        raise WorklogsError(
+            f"multiple plans found for name {name!r}:\n{listed}\n"
+            "Use --scope to narrow the search.",
+        )
+    return matches[0]
+
+
+def _create_workset_for_plan(
+    *,
+    identity: WorklogIdentity,
+    config: WorklogConfig,
+    plan_path: Path,
+    repo_specs: list[str],
+) -> None:
+    """Call workset.create_workset with a dest mirroring the plan path."""
+    _require_workset_package()
+    from workset import create_workset
+
+    if config.worksets_root is None:
+        print(
+            "worklogs: warning: --workset given but worksets_root not configured; "
+            "skipping workset creation",
+            file=sys.stderr,
+        )
+        return
+
+    day_dir = plan_path.parent
+    year, month, day = day_dir.parts[-3], day_dir.parts[-2], day_dir.parts[-1]
+    dest = config.worksets_root / year / month / day / identity.name
+    result = create_workset(slug=identity.name, repo_specs=repo_specs, dest=dest)
+    _print_workset_result(result)
+
+
+def _print_workset_result(result: object) -> None:
+    """Print workset creation summary."""
+    print(f"\nworkset ready: {result.path}")  # type: ignore[attr-defined]
+    for repo in result.repos:  # type: ignore[attr-defined]
+        smoke = (
+            "✓"
+            if repo.smoke_passed is True
+            else ("✗" if repo.smoke_passed is False else "~")
+        )
+        label = f"[{repo.env_backend}]" if repo.env_backend != "none" else "[no env]"
+        print(f"  {smoke} {repo.name}  {label}  {repo.branch}")
+        if not repo.env_ok:
+            print(f"    ! {repo.env_message}")
+
+
+def _require_workset_package() -> None:
+    """Raise a clear error if the workset package is not installed."""
+    try:
+        import workset  # noqa: F401
+    except ImportError as exc:
+        raise WorklogsError(
+            "the workset package is required for this command.\n"
+            "Install it with: pip install worklogs[workset]",
+        ) from exc
 
 
 def _resolve_identity(args: argparse.Namespace) -> WorklogIdentity:
-    explicit_fields = (args.kind, args.project, args.slug)
-    has_explicit_fields = any(value is not None for value in explicit_fields)
-
-    if args.identity is not None and has_explicit_fields:
-        msg = "use either KIND--PROJECT--SLUG or --kind/--project/--slug, not both"
-        raise WorklogsError(msg)
-
+    """Resolve worklog identity from CLI args."""
+    has_explicit = args.name is not None or args.kind is not None
+    if args.identity is not None and has_explicit:
+        raise WorklogsError("use either NAME--KIND or --name/--kind, not both")
     if args.identity is not None:
         return _parse_identity_token(args.identity)
-
-    if not all(explicit_fields):
-        msg = "provide KIND--PROJECT--SLUG or all of --kind, --project, and --slug"
-        raise WorklogsError(msg)
-
-    return _validate_identity(
-        kind=str(args.kind),
-        project=str(args.project),
-        slug=str(args.slug),
-    )
+    if args.name is None or args.kind is None:
+        raise WorklogsError("provide NAME--KIND or both --name and --kind")
+    return _validate_identity(name=args.name, kind=args.kind)
 
 
 def _parse_identity_token(token: str) -> WorklogIdentity:
+    """Parse a compact NAME--KIND token."""
     parts = token.split("--")
-    if len(parts) != 3:
-        msg = "identity must use exactly KIND--PROJECT--SLUG"
-        raise WorklogsError(msg)
-    kind, project, slug = parts
-    return _validate_identity(kind=kind, project=project, slug=slug)
+    if len(parts) != 2:
+        raise WorklogsError(
+            "identity must use exactly NAME--KIND (e.g. leansim2sim--plan)",
+        )
+    name, kind = parts
+    return _validate_identity(name=name, kind=kind)
 
 
-def _validate_identity(*, kind: str, project: str, slug: str) -> WorklogIdentity:
+def _validate_identity(*, name: str, kind: str) -> WorklogIdentity:
+    """Validate identity fields and return a WorklogIdentity."""
     if kind not in VALID_KINDS:
         valid = ", ".join(sorted(VALID_KINDS))
-        msg = f"unknown kind {kind!r}; expected one of: {valid}"
-        raise WorklogsError(msg)
-    for field_name, value in (("project", project), ("slug", slug)):
-        if not value:
-            msg = f"{field_name} cannot be empty"
-            raise WorklogsError(msg)
-        if not SLUG_PATTERN.fullmatch(value):
-            msg = (
-                f"{field_name} must start with a lowercase letter or digit and "
-                "contain only lowercase letters, digits, dots, underscores, or hyphens"
-            )
-            raise WorklogsError(msg)
-    return WorklogIdentity(kind=kind, project=project, slug=slug)
+        raise WorklogsError(f"unknown kind {kind!r}; expected one of: {valid}")
+    if not name:
+        raise WorklogsError("name cannot be empty")
+    if not NAME_PATTERN.fullmatch(name):
+        raise WorklogsError(
+            "name must start with a lowercase letter or digit and contain only "
+            "lowercase letters, digits, dots, underscores, or hyphens",
+        )
+    return WorklogIdentity(name=name, kind=kind)
 
 
 def _resolve_config(
-    args: argparse.Namespace,
-    environment: Mapping[str, str],
+    args: argparse.Namespace, environment: Mapping[str, str]
 ) -> WorklogConfig:
+    """Resolve config from args, environment, and config file."""
     file_config = _load_config()
-
     root_value = _first_string(
-        args.root,
+        getattr(args, "root", None),
         environment.get("WORKLOG_ROOT"),
         file_config.get("root"),
         "~/worklog",
     )
-    if root_value is None:
-        msg = "root is required"
-        raise WorklogsError(msg)
     scope_value = _first_string(
-        args.scope,
+        getattr(args, "scope", None),
         environment.get("WORKLOG_SCOPE"),
         file_config.get("default_scope"),
     )
-    if scope_value is None:
-        msg = "scope is required; set --scope, WORKLOG_SCOPE, or default_scope"
-        raise WorklogsError(msg)
-    if not SLUG_PATTERN.fullmatch(scope_value):
-        msg = (
-            "scope must start with a lowercase letter or digit and contain only "
-            "lowercase letters, digits, dots, underscores, or hyphens"
+    if scope_value is None and args.command not in {"find"}:
+        raise WorklogsError(
+            "scope is required; set --scope, WORKLOG_SCOPE, or default_scope"
         )
-        raise WorklogsError(msg)
+    if scope_value is not None and not NAME_PATTERN.fullmatch(scope_value):
+        raise WorklogsError("scope must match the name pattern")
 
     timezone_value = _first_string(
-        args.timezone,
+        getattr(args, "timezone", None),
         environment.get("WORKLOG_TIMEZONE"),
         file_config.get("timezone"),
     )
-    return WorklogConfig(
-        root=Path(root_value).expanduser(),
-        scope=scope_value,
-        timezone=_resolve_timezone(timezone_value),
-    )
-
-
-def _resolve_workset_config(
-    args: argparse.Namespace,
-    environment: Mapping[str, str],
-) -> WorksetConfig:
-    file_config = _load_config()
-
-    root_value = _first_string(
-        args.worksets_root,
+    worksets_raw = _first_string(
+        getattr(args, "worksets_root", None),
         environment.get("WORKLOG_WORKSETS_ROOT"),
         file_config.get("worksets_root"),
     )
-    if root_value is None:
-        msg = (
-            "worksets root is required; set --worksets-root, "
-            "WORKLOG_WORKSETS_ROOT, or worksets_root in config"
-        )
-        raise WorklogsError(msg)
-
-    timezone_value = _first_string(
-        args.timezone,
-        environment.get("WORKLOG_TIMEZONE"),
-        file_config.get("timezone"),
-    )
-    return WorksetConfig(
-        root=Path(root_value).expanduser(),
+    return WorklogConfig(
+        root=Path(root_value or "~/worklog").expanduser(),
+        scope=scope_value or "",
         timezone=_resolve_timezone(timezone_value),
+        worksets_root=Path(worksets_raw).expanduser() if worksets_raw else None,
+    )
+
+
+def _resolve_worksets_root(config: WorklogConfig) -> Path:
+    """Resolve worksets_root, raising if not configured."""
+    if config.worksets_root is not None:
+        return config.worksets_root
+    raise WorklogsError(
+        "worksets_root is required; set --worksets-root, WORKLOG_WORKSETS_ROOT, "
+        "or worksets_root in config",
     )
 
 
 def _load_config() -> dict[str, str]:
+    """Load the worklogs config file."""
     config_path = CONFIG_PATH.expanduser()
     if not config_path.exists():
         return {}
-
     try:
-        with config_path.open("rb") as config_file:
-            raw_config = tomllib.load(config_file)
+        with config_path.open("rb") as f:
+            raw = tomllib.load(f)
     except tomllib.TOMLDecodeError as error:
-        msg = f"could not parse config file {config_path}: {error}"
-        raise WorklogsError(msg) from error
+        raise WorklogsError(
+            f"could not parse config file {config_path}: {error}"
+        ) from error
     except OSError as error:
-        msg = f"could not read config file {config_path}: {error}"
-        raise WorklogsError(msg) from error
+        raise WorklogsError(
+            f"could not read config file {config_path}: {error}"
+        ) from error
 
-    config: dict[str, str] = {}
+    result: dict[str, str] = {}
     for key in ("root", "default_scope", "timezone", "worksets_root"):
-        value = raw_config.get(key)
+        value = raw.get(key)
         if value is None:
             continue
         if not isinstance(value, str):
-            msg = f"config field {key!r} must be a string"
-            raise WorklogsError(msg)
-        config[key] = value
-    return config
+            raise WorklogsError(f"config field {key!r} must be a string")
+        result[key] = value
+    return result
 
 
 def _first_string(*values: object) -> str | None:
+    """Return the first non-empty string value."""
     for value in values:
         if isinstance(value, str) and value:
             return value
@@ -414,84 +445,13 @@ def _first_string(*values: object) -> str | None:
 
 
 def _resolve_timezone(timezone_name: str | None) -> tzinfo:
+    """Resolve a timezone name to a tzinfo object."""
     if timezone_name is None:
         return datetime.now(UTC).astimezone().tzinfo or UTC
     try:
         return ZoneInfo(timezone_name)
     except ZoneInfoNotFoundError as error:
-        msg = f"unknown timezone {timezone_name!r}"
-        raise WorklogsError(msg) from error
-
-
-def _resolve_workset_date(value: str | None, timezone: tzinfo) -> date:
-    if value is None:
-        return datetime.now(UTC).astimezone(timezone).date()
-    try:
-        return date.fromisoformat(value)
-    except ValueError as error:
-        msg = f"invalid date {value!r}; expected YYYY-MM-DD"
-        raise WorklogsError(msg) from error
-
-
-def _parse_workset_path(value: str) -> tuple[str, ...]:
-    if not value:
-        msg = "workset path cannot be empty"
-        raise WorklogsError(msg)
-    if Path(value).is_absolute():
-        msg = "workset path must be relative"
-        raise WorklogsError(msg)
-
-    parts = tuple(value.split("/"))
-    for part in parts:
-        if part in {"", ".", ".."}:
-            msg = "workset path cannot contain empty, '.', or '..' components"
-            raise WorklogsError(msg)
-        if not SLUG_PATTERN.fullmatch(part):
-            msg = (
-                "workset path components must start with a lowercase letter or "
-                "digit and contain only lowercase letters, digits, dots, "
-                "underscores, or hyphens"
-            )
-            raise WorklogsError(msg)
-    return parts
-
-
-def _build_workset_path(
-    *,
-    config: WorksetConfig,
-    workset_date: date,
-    path_parts: Sequence[str],
-) -> Path:
-    return (
-        config.root
-        / f"{workset_date:%Y}"
-        / f"{workset_date:%m}"
-        / f"{workset_date:%d}"
-        / Path(*path_parts)
-    )
-
-
-def _create_workset_directory(path: Path) -> bool:
-    if path.exists():
-        if not path.is_dir():
-            msg = f"workset path exists but is not a directory: {path}"
-            raise WorklogsError(msg)
-        try:
-            has_contents = next(path.iterdir(), None) is not None
-        except OSError as error:
-            msg = f"could not inspect existing workset directory {path}: {error}"
-            raise WorklogsError(msg) from error
-        if has_contents:
-            msg = f"refusing to use existing non-empty workset directory: {path}"
-            raise WorklogsError(msg)
-        return False
-
-    try:
-        path.mkdir(parents=True)
-    except OSError as error:
-        msg = f"could not create workset directory {path}: {error}"
-        raise WorklogsError(msg) from error
-    return True
+        raise WorklogsError(f"unknown timezone {timezone_name!r}") from error
 
 
 def _build_entries(
@@ -499,43 +459,42 @@ def _build_entries(
     identity: WorklogIdentity,
     config: WorklogConfig,
     now: datetime,
+    project: str,
     links: Sequence[str],
     folders: Sequence[str],
     create_companion: bool,
 ) -> tuple[WorklogEntry, ...]:
-    plan_companion = None
-    if identity.kind == "plan" and create_companion:
-        plan_companion = WorklogIdentity(
-            kind="note",
-            project=identity.project,
-            slug=f"{identity.slug}-execution-log",
-        )
-
+    """Build worklog entries to create."""
     primary_path = _entry_path(identity=identity, config=config, now=now)
-    companion_path = (
-        _entry_path(identity=plan_companion, config=config, now=now)
-        if plan_companion is not None
-        else None
-    )
+
+    companion_identity = None
+    companion_path = None
+    if identity.kind == "plan" and create_companion:
+        companion_identity = WorklogIdentity(name=identity.name, kind="note")
+        companion_path = _entry_path(
+            identity=companion_identity, config=config, now=now
+        )
 
     primary_content = _render_content(
         identity=identity,
         created=_format_created(now),
+        project=project,
         links=links,
         folders=folders,
-        own_path=primary_path,
+
         companion_path=companion_path,
         plan_path=None,
     )
     entries = [WorklogEntry(path=primary_path, content=primary_content)]
 
-    if plan_companion is not None and companion_path is not None:
+    if companion_identity is not None and companion_path is not None:
         companion_content = _render_content(
-            identity=plan_companion,
+            identity=companion_identity,
             created=_format_created(now),
+            project=project,
             links=(),
             folders=(),
-            own_path=companion_path,
+
             companion_path=None,
             plan_path=primary_path,
         )
@@ -545,18 +504,16 @@ def _build_entries(
 
 
 def _entry_path(
-    *,
-    identity: WorklogIdentity,
-    config: WorklogConfig,
-    now: datetime,
+    *, identity: WorklogIdentity, config: WorklogConfig, now: datetime
 ) -> Path:
+    """Compute the file path: root/scope/YYYY/MM/DD/HHMM--name--kind.md."""
     return (
         config.root
         / config.scope
         / f"{now:%Y}"
         / f"{now:%m}"
         / f"{now:%d}"
-        / f"{now:%H%M}--{identity.kind}--{identity.project}--{identity.slug}.md"
+        / f"{now:%H%M}--{identity.name}--{identity.kind}.md"
     )
 
 
@@ -564,24 +521,23 @@ def _render_content(
     *,
     identity: WorklogIdentity,
     created: str,
+    project: str,
     links: Sequence[str],
     folders: Sequence[str],
-    own_path: Path,
+
     companion_path: Path | None,
     plan_path: Path | None,
 ) -> str:
+    """Render full markdown content for a worklog entry."""
     frontmatter = _render_frontmatter(
         kind=identity.kind,
         created=created,
-        project=identity.project,
+        project=project,
         links=links,
         folders=folders,
     )
     if identity.kind == "plan":
-        if companion_path is None:
-            body = _render_plan_without_companion()
-        else:
-            body = _render_plan_with_companion(own_path, companion_path)
+        body = _render_plan(companion_path)
     elif identity.kind == "note" and plan_path is not None:
         body = _render_execution_note(identity, plan_path)
     elif identity.kind == "note":
@@ -591,8 +547,7 @@ def _render_content(
     elif identity.kind == "codereview":
         body = _render_codereview(identity)
     else:
-        msg = f"cannot render unsupported kind {identity.kind!r}"
-        raise WorklogsError(msg)
+        raise WorklogsError(f"cannot render unsupported kind {identity.kind!r}")
     return f"{frontmatter}\n\n{body}\n"
 
 
@@ -604,12 +559,11 @@ def _render_frontmatter(
     links: Sequence[str],
     folders: Sequence[str],
 ) -> str:
-    lines = [
-        "---",
-        f"kind: {kind}",
-        "status: open",
-        f'created: "{created}"',
-        f"project: {project}",
+    """Render YAML frontmatter block."""
+    lines = ["---", f"kind: {kind}", "status: open", f'created: "{created}"']
+    if project:
+        lines.append(f"project: {project}")
+    lines += [
         "links:",
         *_render_list_items(links),
         "folders:",
@@ -620,14 +574,30 @@ def _render_frontmatter(
 
 
 def _render_list_items(values: Sequence[str]) -> list[str]:
+    """Render frontmatter list items."""
     if not values:
         return ["  -"]
     return [f"  - {value}" for value in values]
 
 
-def _render_plan_with_companion(own_path: Path, companion_path: Path) -> str:
-    plan_folder = own_path.with_suffix("")
-    folder_plan_path = plan_folder / own_path.name
+def _render_plan(companion_path: Path | None) -> str:
+    """Render plan body."""
+    if companion_path is None:
+        return """# Core Problem
+
+# Goal
+
+# Non-Goals
+
+# Plan
+
+## Phase 1
+
+## Phase N
+
+# Done Criteria
+
+# Notes"""
     return f"""# Working Rule
 
 As you execute this plan, put running notes, commands, findings, failures,
@@ -635,23 +605,7 @@ validation results, PR links, and decisions in the companion note:
 
 `{companion_path}`
 
-Keep this plan for strategy, phase gates, decisions, and final status.
-
-If the work produces bulky artifacts, convert the plan file into a same-named
-folder and keep the markdown plan inside it. Put bulky output under clearly
-named subfolders.
-
-For example, this file can become:
-
-```text
-{plan_folder}/
-|-- {folder_plan_path.name}
-`-- artifacts/
-    `-- <clear-artifact-name>
-```
-
-The companion note remains the running execution log. The plan folder is only
-for artifacts that should stay next to the plan.
+Keep this plan for strategy, phase gates, and decisions.
 
 Companion note: [{companion_path.name}]({companion_path.name})
 
@@ -665,28 +619,6 @@ Companion note: [{companion_path.name}]({companion_path.name})
 
 ## Phase 1
 
-## Phase 2
-
-## Phase N
-
-# Done Criteria
-
-# Notes"""
-
-
-def _render_plan_without_companion() -> str:
-    return """# Core Problem
-
-# Goal
-
-# Non-Goals
-
-# Plan
-
-## Phase 1
-
-## Phase 2
-
 ## Phase N
 
 # Done Criteria
@@ -695,26 +627,29 @@ def _render_plan_without_companion() -> str:
 
 
 def _render_execution_note(identity: WorklogIdentity, plan_path: Path) -> str:
-    return f"""# {identity.project}: {identity.slug}
+    """Render companion execution note body."""
+    return f"""# {identity.name}
 
 Plan: [{plan_path.name}]({plan_path.name})
 
 # Update Discipline
 
 Use this note for running notes, commands, findings, failures, validation
-results, PR links, and decisions while executing the plan.
+results, PR links, and decisions. Update it before opening a PR.
 
 # Timeline"""
 
 
 def _render_note(identity: WorklogIdentity) -> str:
-    return f"""# {identity.project}: {identity.slug}
+    """Render standalone note body."""
+    return f"""# {identity.name}
 
 # Notes"""
 
 
 def _render_investigation(identity: WorklogIdentity) -> str:
-    return f"""# {identity.project}: {identity.slug}
+    """Render investigation body."""
+    return f"""# {identity.name}
 
 # Question
 
@@ -726,7 +661,8 @@ def _render_investigation(identity: WorklogIdentity) -> str:
 
 
 def _render_codereview(identity: WorklogIdentity) -> str:
-    return f"""# {identity.project}: {identity.slug}
+    """Render code review body."""
+    return f"""# {identity.name}
 
 # Findings
 
@@ -736,6 +672,7 @@ def _render_codereview(identity: WorklogIdentity) -> str:
 
 
 def _format_created(value: datetime) -> str:
+    """Format datetime for the created frontmatter field."""
     hour = value.strftime("%I").lstrip("0")
     return (
         f"{value:%a}, {value:%b} {value.day}, {value:%Y}, "
@@ -744,6 +681,7 @@ def _format_created(value: datetime) -> str:
 
 
 def _format_timezone_label(value: datetime) -> str:
+    """Return a short display label for the timezone."""
     key = getattr(value.tzinfo, "key", None)
     if isinstance(key, str) and key in GENERIC_TIMEZONE_LABELS:
         return GENERIC_TIMEZONE_LABELS[key]
@@ -751,6 +689,7 @@ def _format_timezone_label(value: datetime) -> str:
 
 
 def _print_dry_run(entries: Sequence[WorklogEntry]) -> None:
+    """Print dry-run summary without writing files."""
     print("Would create:")
     for entry in entries:
         print(entry.path)
@@ -761,27 +700,28 @@ def _print_dry_run(entries: Sequence[WorklogEntry]) -> None:
 
 
 def _write_entries(entries: Sequence[WorklogEntry]) -> None:
-    existing_paths = [entry.path for entry in entries if entry.path.exists()]
-    if existing_paths:
-        formatted_paths = "\n".join(str(path) for path in existing_paths)
-        msg = f"refusing to overwrite existing worklog file(s):\n{formatted_paths}"
-        raise WorklogsError(msg)
-
-    created_paths: list[Path] = []
+    """Write worklog entries, refusing to overwrite existing files."""
+    existing = [e.path for e in entries if e.path.exists()]
+    if existing:
+        formatted = "\n".join(str(p) for p in existing)
+        raise WorklogsError(
+            f"refusing to overwrite existing worklog file(s):\n{formatted}"
+        )
+    created: list[Path] = []
     try:
         for entry in entries:
             entry.path.parent.mkdir(parents=True, exist_ok=True)
-            with entry.path.open("x", encoding="utf-8") as worklog_file:
-                worklog_file.write(entry.content)
-            created_paths.append(entry.path)
+            with entry.path.open("x", encoding="utf-8") as f:
+                f.write(entry.content)
+            created.append(entry.path)
     except OSError as error:
-        for path in created_paths:
+        for path in created:
             _unlink_created_file(path)
-        msg = f"could not write worklog file: {error}"
-        raise WorklogsError(msg) from error
+        raise WorklogsError(f"could not write worklog file: {error}") from error
 
 
 def _unlink_created_file(path: Path) -> None:
+    """Attempt to remove a partially-written file, ignoring errors."""
     try:
         path.unlink()
     except FileNotFoundError:
