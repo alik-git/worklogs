@@ -201,13 +201,16 @@ def _run_workset(args: argparse.Namespace) -> int:
     year, month, day = day_dir.parts[-3], day_dir.parts[-2], day_dir.parts[-1]
     dest = worksets_root / year / month / day / args.name
 
-    result = create_workset(
-        slug=args.name,
-        repo_specs=args.repo_specs,
-        dest=dest,
-        no_env=args.no_env,
-        no_smoke=args.no_smoke,
-    )
+    try:
+        result = create_workset(
+            slug=args.name,
+            repo_specs=args.repo_specs,
+            dest=dest,
+            no_env=args.no_env,
+            no_smoke=args.no_smoke,
+        )
+    except Exception as exc:
+        raise WorklogsError(str(exc)) from exc
     _print_workset_result(result)
     return 0 if result.ok else 1
 
@@ -289,7 +292,10 @@ def _create_workset_for_plan(
     day_dir = plan_path.parent
     year, month, day = day_dir.parts[-3], day_dir.parts[-2], day_dir.parts[-1]
     dest = config.worksets_root / year / month / day / identity.name
-    result = create_workset(slug=identity.name, repo_specs=repo_specs, dest=dest)
+    try:
+        result = create_workset(slug=identity.name, repo_specs=repo_specs, dest=dest)
+    except Exception as exc:
+        raise WorklogsError(str(exc)) from exc
     _print_workset_result(result)
 
 
