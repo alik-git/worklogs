@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 
 def test_version_is_exposed() -> None:
     """Package exposes its current version."""
-    assert worklogs.__version__ == "0.3.1"
+    assert worklogs.__version__ == "0.3.2"
 
 
 def test_cli_accepts_no_arguments() -> None:

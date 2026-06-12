@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import os
 import re
 import subprocess
@@ -20,6 +21,15 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
 VALID_KINDS = frozenset({"plan", "note", "investigation", "codereview"})
+_LOG_FORMAT = "[%(levelname)s] %(message)s"
+_COLOR_FORMAT = "%(log_color)s[%(levelname)s]%(reset)s %(message)s"
+_LOG_COLORS = {
+    "DEBUG": "cyan",
+    "INFO": "bold_white",
+    "WARNING": "yellow",
+    "ERROR": "red",
+}
+LOGGER = logging.getLogger(__name__)
 NAME_PATTERN = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
 CONFIG_PATH = Path("~/.config/worklogs/config.toml")
 
@@ -123,8 +133,26 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _configure_logging() -> None:
+    """Configure color console logging for the worklogs CLI."""
+    use_color = not os.environ.get("NO_COLOR") and sys.stderr.isatty()
+    handler = logging.StreamHandler()
+    if use_color:
+        try:
+            import colorlog
+            handler.setFormatter(
+                colorlog.ColoredFormatter(_COLOR_FORMAT, log_colors=_LOG_COLORS)
+            )
+        except ImportError:
+            handler.setFormatter(logging.Formatter(_LOG_FORMAT))
+    else:
+        handler.setFormatter(logging.Formatter(_LOG_FORMAT))
+    logging.basicConfig(level=logging.INFO, handlers=[handler], force=True)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the worklogs command-line interface."""
+    _configure_logging()
     parser = build_parser()
     args = parser.parse_args(argv)
 
@@ -282,11 +310,7 @@ def _create_workset_for_plan(
     from workset import create_workset
 
     if config.worksets_root is None:
-        print(
-            "worklogs: warning: --workset given but worksets_root not configured; "
-            "skipping workset creation",
-            file=sys.stderr,
-        )
+        LOGGER.warning("--workset given but worksets_root not configured; skipping")
         return
 
     day_dir = plan_path.parent
@@ -300,8 +324,8 @@ def _create_workset_for_plan(
 
 
 def _print_workset_result(result: object) -> None:
-    """Print workset creation summary."""
-    print(f"\nworkset ready: {result.path}")  # type: ignore[attr-defined]
+    """Log workset creation summary."""
+    LOGGER.info("workset ready: %s", result.path)  # type: ignore[attr-defined]
     for repo in result.repos:  # type: ignore[attr-defined]
         smoke = (
             "✓"
@@ -309,9 +333,9 @@ def _print_workset_result(result: object) -> None:
             else ("✗" if repo.smoke_passed is False else "~")
         )
         label = f"[{repo.env_backend}]" if repo.env_backend != "none" else "[no env]"
-        print(f"  {smoke} {repo.name}  {label}  {repo.branch}")
+        LOGGER.info("  %s %s  %s  %s", smoke, repo.name, label, repo.branch)
         if not repo.env_ok:
-            print(f"    ! {repo.env_message}")
+            LOGGER.warning("    %s", repo.env_message)
 
 
 def _require_workset_package() -> None:
@@ -730,7 +754,4 @@ def _unlink_created_file(path: Path) -> None:
     except FileNotFoundError:
         return
     except OSError as error:
-        print(
-            f"worklogs: warning: could not clean up partial file {path}: {error}",
-            file=sys.stderr,
-        )
+        LOGGER.warning("could not clean up partial file %s: %s", path, error)
