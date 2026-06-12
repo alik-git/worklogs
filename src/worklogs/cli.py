@@ -168,10 +168,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.command == "find":
             return _run_find(args)
     except WorklogsError as error:
-        print(f"worklogs: error: {error}", file=sys.stderr)
+        LOGGER.error("%s", error)
         return 2
 
-    print(f"worklogs: error: unknown command: {args.command}", file=sys.stderr)
+    LOGGER.error("unknown command: %s", args.command)
     return 2
 
 
