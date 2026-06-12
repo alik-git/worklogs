@@ -74,7 +74,12 @@ def test_entry_path_format(tmp_path: Path) -> None:
     )
 
     assert path == (
-        tmp_path / "worklog" / "work" / "2026" / "06" / "12"
+        tmp_path
+        / "worklog"
+        / "work"
+        / "2026"
+        / "06"
+        / "12"
         / "1421--leansim2sim--plan.md"
     )
 
@@ -198,10 +203,17 @@ def test_dry_run_writes_nothing(
     root = tmp_path / "worklog"
 
     assert (
-        main([
-            "new", "leansim2sim--plan",
-            "--root", str(root), "--scope", "w", "--dry-run",
-        ])
+        main(
+            [
+                "new",
+                "leansim2sim--plan",
+                "--root",
+                str(root),
+                "--scope",
+                "w",
+                "--dry-run",
+            ]
+        )
         == 0
     )
 
@@ -254,11 +266,17 @@ def test_no_companion_rejected_for_non_plan(
     """--no-companion on a non-plan is an error."""
     _isolate_home(tmp_path, monkeypatch)
     assert (
-        main([
-            "new", "my-obs--note",
-            "--root", str(tmp_path), "--scope", "w",
-            "--no-companion",
-        ])
+        main(
+            [
+                "new",
+                "my-obs--note",
+                "--root",
+                str(tmp_path),
+                "--scope",
+                "w",
+                "--no-companion",
+            ]
+        )
         == 2
     )
     assert "no-companion" in capsys.readouterr().err
@@ -290,8 +308,10 @@ def _isolate_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     home.mkdir(exist_ok=True)
     monkeypatch.setenv("HOME", str(home))
     for var in (
-        "WORKLOG_ROOT", "WORKLOG_SCOPE",
-        "WORKLOG_TIMEZONE", "WORKLOG_WORKSETS_ROOT",
+        "WORKLOG_ROOT",
+        "WORKLOG_SCOPE",
+        "WORKLOG_TIMEZONE",
+        "WORKLOG_WORKSETS_ROOT",
     ):
         monkeypatch.delenv(var, raising=False)
     return home

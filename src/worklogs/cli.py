@@ -481,7 +481,6 @@ def _build_entries(
         project=project,
         links=links,
         folders=folders,
-
         companion_path=companion_path,
         plan_path=None,
     )
@@ -494,7 +493,6 @@ def _build_entries(
             project=project,
             links=(),
             folders=(),
-
             companion_path=None,
             plan_path=primary_path,
         )
@@ -524,7 +522,6 @@ def _render_content(
     project: str,
     links: Sequence[str],
     folders: Sequence[str],
-
     companion_path: Path | None,
     plan_path: Path | None,
 ) -> str:
