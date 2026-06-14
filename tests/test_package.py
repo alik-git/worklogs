@@ -1,4 +1,4 @@
-"""Tests for worklogs CLI — HHMM--name--kind.md format."""
+"""Tests for worklogs CLI — HHMM-Hp/a--name--kind.md format."""
 
 from __future__ import annotations
 
@@ -57,7 +57,7 @@ def test_parse_identity_token_rejects_unknown_kind() -> None:
 
 
 def test_entry_path_format(tmp_path: Path) -> None:
-    """Path uses HHMM--name--kind.md format."""
+    """Path uses HHMM-Hp/a--name--kind.md format with human-readable dirs."""
     tz = ZoneInfo("America/Toronto")
     config = WorklogConfig(
         root=tmp_path / "worklog",
@@ -78,9 +78,9 @@ def test_entry_path_format(tmp_path: Path) -> None:
         / "worklog"
         / "work"
         / "2026"
-        / "06"
-        / "12"
-        / "1421--leansim2sim--plan.md"
+        / "06-june"
+        / "12-friday"
+        / "1421-2p--leansim2sim--plan.md"
     )
 
 
@@ -106,8 +106,8 @@ def test_plan_creates_companion_with_same_name(tmp_path: Path) -> None:
     )
 
     assert len(entries) == 2
-    assert entries[0].path.name == "1421--leansim2sim--plan.md"
-    assert entries[1].path.name == "1421--leansim2sim--note.md"
+    assert entries[0].path.name == "1421-2p--leansim2sim--plan.md"
+    assert entries[1].path.name == "1421-2p--leansim2sim--note.md"
     assert "leansim2sim--note.md" in entries[0].content
     assert "leansim2sim--plan.md" in entries[1].content
 
@@ -134,7 +134,7 @@ def test_note_creates_single_file(tmp_path: Path) -> None:
     )
 
     assert len(entries) == 1
-    assert entries[0].path.name == "1000--quick-observation--note.md"
+    assert entries[0].path.name == "1000-10a--quick-observation--note.md"
 
 
 def test_new_creates_new_format_files(
@@ -149,7 +149,7 @@ def test_new_creates_new_format_files(
 
     created = sorted((root / "work").glob("*/*/*/*.md"))
     assert len(created) == 2
-    names = {p.name[6:] for p in created}  # strip HHMM-- prefix
+    names = {p.name.split("--", 1)[1] for p in created}  # strip HHMM-Hp/a-- prefix
     assert names == {"leansim2sim--plan.md", "leansim2sim--note.md"}
 
 
