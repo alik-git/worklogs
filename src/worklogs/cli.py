@@ -140,6 +140,7 @@ def _configure_logging() -> None:
     if use_color:
         try:
             import colorlog
+
             handler.setFormatter(
                 colorlog.ColoredFormatter(_COLOR_FORMAT, log_colors=_LOG_COLORS)
             )
@@ -282,7 +283,7 @@ def _run_find(args: argparse.Namespace) -> int:
 
 def _find_plan_by_name(name: str, root: Path) -> Path:
     """Find a plan file by name slug, erroring on zero or multiple matches."""
-    pattern = f"*/*/*/*/[0-9][0-9][0-9][0-9]--{name}--plan.md"
+    pattern = f"*/*/*/*/[0-9]*--{name}--plan.md"
     matches = sorted(root.glob(pattern))
     if not matches:
         raise WorklogsError(
@@ -534,14 +535,17 @@ def _build_entries(
 def _entry_path(
     *, identity: WorklogIdentity, config: WorklogConfig, now: datetime
 ) -> Path:
-    """Compute the file path: root/scope/YYYY/MM/DD/HHMM--name--kind.md."""
+    """Compute the file path for a worklog entry."""
+    hour12 = int(now.strftime("%I"))
+    period = "a" if now.hour < 12 else "p"
+    time_prefix = f"{now:%H%M}-{hour12}{period}"
     return (
         config.root
         / config.scope
         / f"{now:%Y}"
-        / f"{now:%m}"
-        / f"{now:%d}"
-        / f"{now:%H%M}--{identity.name}--{identity.kind}.md"
+        / f"{now:%m}-{now:%B}".lower()
+        / f"{now:%d}-{now:%A}".lower()
+        / f"{time_prefix}--{identity.name}--{identity.kind}.md"
     )
 
 
