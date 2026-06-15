@@ -432,10 +432,11 @@ wheels = [
 
 [[package]]
 name = "worklogs"
-version = "0.3.3"
+version = "0.3.5"
 source = { editable = "." }
 dependencies = [
     { name = "colorlog" },
+    { name = "workset" },
 ]
 
 [package.optional-dependencies]
@@ -455,5 +456,18 @@ requires-dist = [
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.11" },
+    { name = "workset", specifier = ">=0.2.2" },
 ]
 provides-extras = ["dev"]
+
+[[package]]
+name = "workset"
+version = "0.2.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "colorlog" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/91/96/5a9a604de685ae10c4bf5ef77d2a46c224b98bc29e46b41f0487843d2ae0/workset-0.2.2.tar.gz", hash = "sha256:6114dc8a84a57cbd3339e8f45abfd715cea084288f51ef15acb25c4c58135184", size = 45104, upload-time = "2026-06-15T05:52:48.57Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b2/11/5edefc38a2ecded09d03f727940c71a10c8604f49fcbc6084db5016f73bf/workset-0.2.2-py3-none-any.whl", hash = "sha256:ba21150762e43b71a8f567b3fcfc345bd5ac388d6c80824f00333a488595f7f0", size = 11928, upload-time = "2026-06-15T05:52:47.341Z" },
+]

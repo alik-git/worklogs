@@ -15,6 +15,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from workset.paths import dated_dir
+
 from worklogs import __version__
 
 if TYPE_CHECKING:
@@ -340,13 +342,13 @@ def _print_workset_result(result: object) -> None:
 
 
 def _require_workset_package() -> None:
-    """Raise a clear error if the workset package is not installed."""
+    """Raise a clear error if the direct workset dependency is unavailable."""
     try:
         import workset  # noqa: F401
     except ImportError as exc:
         raise WorklogsError(
-            "the workset package is required for this command.\n"
-            "Install it with: pip install worklogs[workset]",
+            "the workset package is required but could not be imported.\n"
+            "Reinstall worklogs so its dependencies are present.",
         ) from exc
 
 
@@ -539,14 +541,8 @@ def _entry_path(
     hour12 = int(now.strftime("%I"))
     period = "a" if now.hour < 12 else "p"
     time_prefix = f"{now:%H%M}-{hour12}{period}"
-    return (
-        config.root
-        / config.scope
-        / f"{now:%Y}"
-        / f"{now:%m}-{now:%B}".lower()
-        / f"{now:%d}-{now:%A}".lower()
-        / f"{time_prefix}--{identity.name}--{identity.kind}.md"
-    )
+    day_dir = dated_dir(config.root / config.scope, now)
+    return day_dir / f"{time_prefix}--{identity.name}--{identity.kind}.md"
 
 
 def _render_content(

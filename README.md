@@ -6,7 +6,7 @@ Local markdown worklog helpers for developer workflows.
 filename:
 
 ```text
-~/worklog/<scope>/YYYY/MM/DD/HHMM--kind--project--slug.md
+~/worklog/<scope>/YYYY/MM-month/DD-ddd/HHMM-Ha--name--kind.md
 ```
 
 ## Installation
@@ -88,7 +88,7 @@ worklogs workset new release-tools/python-packaging/worklogs-0.2.1 \
 Worksets are created under:
 
 ```text
-<worksets-root>/YYYY/MM/DD/<workset-path>/
+<worksets-root>/YYYY/MM-month/DD-ddd/<workset-path>/
 ```
 
 Preview a workset path without creating it:

@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 
 def test_version_is_exposed() -> None:
     """Package exposes its current version."""
-    assert worklogs.__version__ == "0.3.3"
+    assert worklogs.__version__ == "0.3.5"
 
 
 def test_cli_accepts_no_arguments() -> None:
@@ -79,7 +79,7 @@ def test_entry_path_format(tmp_path: Path) -> None:
         / "work"
         / "2026"
         / "06-june"
-        / "12-friday"
+        / "12-fri"
         / "1421-2p--leansim2sim--plan.md"
     )
 
