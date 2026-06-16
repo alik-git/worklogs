@@ -432,7 +432,7 @@ wheels = [
 
 [[package]]
 name = "worklogs"
-version = "0.3.5"
+version = "0.3.6"
 source = { editable = "." }
 dependencies = [
     { name = "colorlog" },
@@ -456,18 +456,18 @@ requires-dist = [
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.11" },
-    { name = "workset", specifier = ">=0.2.2" },
+    { name = "workset", specifier = ">=0.2.4" },
 ]
 provides-extras = ["dev"]
 
 [[package]]
 name = "workset"
-version = "0.2.2"
+version = "0.2.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "colorlog" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/91/96/5a9a604de685ae10c4bf5ef77d2a46c224b98bc29e46b41f0487843d2ae0/workset-0.2.2.tar.gz", hash = "sha256:6114dc8a84a57cbd3339e8f45abfd715cea084288f51ef15acb25c4c58135184", size = 45104, upload-time = "2026-06-15T05:52:48.57Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/51/04/55f92a6332f0071e577530f11cdd0ea935bddc9adc93b4164235c33a3527/workset-0.2.4.tar.gz", hash = "sha256:a6c97d724ba1104ae0f17e40eacfa84940dc3e1ef2c48273d1fd73356eefade0", size = 45960, upload-time = "2026-06-16T18:19:56.27Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/b2/11/5edefc38a2ecded09d03f727940c71a10c8604f49fcbc6084db5016f73bf/workset-0.2.2-py3-none-any.whl", hash = "sha256:ba21150762e43b71a8f567b3fcfc345bd5ac388d6c80824f00333a488595f7f0", size = 11928, upload-time = "2026-06-15T05:52:47.341Z" },
+    { url = "https://files.pythonhosted.org/packages/04/ee/ca4ea1dbac33ab097489d037857eee78de6309e640dbb4f95f55776a90b8/workset-0.2.4-py3-none-any.whl", hash = "sha256:ea01fac7e32d8a334c6434653eb96498e2cc4995df4524af72698db2ef51c2a3", size = 12524, upload-time = "2026-06-16T18:19:54.819Z" },
 ]

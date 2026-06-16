@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 
 def test_version_is_exposed() -> None:
     """Package exposes its current version."""
-    assert worklogs.__version__ == "0.3.5"
+    assert worklogs.__version__ == "0.3.6"
 
 
 def test_cli_accepts_no_arguments() -> None:
@@ -38,8 +38,8 @@ def test_cli_accepts_no_arguments() -> None:
 
 def test_parse_identity_token_name_kind() -> None:
     """Parse compact NAME--KIND token."""
-    assert _parse_identity_token("leansim2sim--plan") == WorklogIdentity(
-        name="leansim2sim",
+    assert _parse_identity_token("api-refactor--plan") == WorklogIdentity(
+        name="api-refactor",
         kind="plan",
     )
 
@@ -68,7 +68,7 @@ def test_entry_path_format(tmp_path: Path) -> None:
     now = datetime(2026, 6, 12, 14, 21, tzinfo=tz)
 
     path = _entry_path(
-        identity=WorklogIdentity(name="leansim2sim", kind="plan"),
+        identity=WorklogIdentity(name="api-refactor", kind="plan"),
         config=config,
         now=now,
     )
@@ -80,7 +80,7 @@ def test_entry_path_format(tmp_path: Path) -> None:
         / "2026"
         / "06-june"
         / "12-fri"
-        / "1421-2p--leansim2sim--plan.md"
+        / "1421-2p--api-refactor--plan.md"
     )
 
 
@@ -96,20 +96,20 @@ def test_plan_creates_companion_with_same_name(tmp_path: Path) -> None:
     now = datetime(2026, 6, 12, 14, 21, tzinfo=tz)
 
     entries = _build_entries(
-        identity=WorklogIdentity(name="leansim2sim", kind="plan"),
+        identity=WorklogIdentity(name="api-refactor", kind="plan"),
         config=config,
         now=now,
-        project="minerva-sim2sim",
+        project="example-service",
         links=(),
         folders=(),
         create_companion=True,
     )
 
     assert len(entries) == 2
-    assert entries[0].path.name == "1421-2p--leansim2sim--plan.md"
-    assert entries[1].path.name == "1421-2p--leansim2sim--note.md"
-    assert "leansim2sim--note.md" in entries[0].content
-    assert "leansim2sim--plan.md" in entries[1].content
+    assert entries[0].path.name == "1421-2p--api-refactor--plan.md"
+    assert entries[1].path.name == "1421-2p--api-refactor--note.md"
+    assert "api-refactor--note.md" in entries[0].content
+    assert "api-refactor--plan.md" in entries[1].content
 
 
 def test_note_creates_single_file(tmp_path: Path) -> None:
@@ -145,12 +145,12 @@ def test_new_creates_new_format_files(
     root = tmp_path / "worklog"
     _write_config(tmp_path, monkeypatch, root=root, default_scope="work")
 
-    assert main(["new", "leansim2sim--plan"]) == 0
+    assert main(["new", "api-refactor--plan"]) == 0
 
     created = sorted((root / "work").glob("*/*/*/*.md"))
     assert len(created) == 2
     names = {p.name.split("--", 1)[1] for p in created}  # strip HHMM-Hp/a-- prefix
-    assert names == {"leansim2sim--plan.md", "leansim2sim--note.md"}
+    assert names == {"api-refactor--plan.md", "api-refactor--note.md"}
 
 
 def test_new_note_is_single_file(
@@ -206,7 +206,7 @@ def test_dry_run_writes_nothing(
         main(
             [
                 "new",
-                "leansim2sim--plan",
+                "api-refactor--plan",
                 "--root",
                 str(root),
                 "--scope",
@@ -218,18 +218,18 @@ def test_dry_run_writes_nothing(
     )
 
     out = capsys.readouterr().out
-    assert "leansim2sim--plan.md" in out
-    assert "leansim2sim--note.md" in out
+    assert "api-refactor--plan.md" in out
+    assert "api-refactor--note.md" in out
     assert not root.exists()
 
 
 def test_find_plan_by_name_finds_match(tmp_path: Path) -> None:
     """Return the matching plan path."""
-    plan = tmp_path / "work" / "2026" / "06" / "12" / "1421--leansim2sim--plan.md"
+    plan = tmp_path / "work" / "2026" / "06" / "12" / "1421--api-refactor--plan.md"
     plan.parent.mkdir(parents=True)
     plan.write_text("", encoding="utf-8")
 
-    assert _find_plan_by_name("leansim2sim", tmp_path) == plan
+    assert _find_plan_by_name("api-refactor", tmp_path) == plan
 
 
 def test_find_plan_by_name_raises_on_zero(tmp_path: Path) -> None:
@@ -241,12 +241,12 @@ def test_find_plan_by_name_raises_on_zero(tmp_path: Path) -> None:
 def test_find_plan_by_name_raises_on_multiple(tmp_path: Path) -> None:
     """Raise with list when multiple plans match."""
     for scope in ("work", "personal"):
-        plan = tmp_path / scope / "2026" / "06" / "12" / "1421--leansim2sim--plan.md"
+        plan = tmp_path / scope / "2026" / "06" / "12" / "1421--api-refactor--plan.md"
         plan.parent.mkdir(parents=True)
         plan.write_text("", encoding="utf-8")
 
     with pytest.raises(WorklogsError, match="multiple plans found"):
-        _find_plan_by_name("leansim2sim", tmp_path)
+        _find_plan_by_name("api-refactor", tmp_path)
 
 
 def test_write_entries_refuses_overwrite(tmp_path: Path) -> None:

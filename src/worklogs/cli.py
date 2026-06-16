@@ -94,7 +94,7 @@ def build_parser() -> argparse.ArgumentParser:
         "identity",
         nargs="?",
         metavar="NAME--KIND",
-        help="compact identity token, e.g. leansim2sim--plan",
+        help="compact identity token, e.g. api-refactor--plan",
     )
     new.add_argument("--name", help="work item name slug")
     new.add_argument("--kind", choices=sorted(VALID_KINDS))
@@ -369,7 +369,7 @@ def _parse_identity_token(token: str) -> WorklogIdentity:
     parts = token.split("--")
     if len(parts) != 2:
         raise WorklogsError(
-            "identity must use exactly NAME--KIND (e.g. leansim2sim--plan)",
+            "identity must use exactly NAME--KIND (e.g. api-refactor--plan)",
         )
     name, kind = parts
     return _validate_identity(name=name, kind=kind)

@@ -12,19 +12,19 @@ filename:
 ## Installation
 
 ```bash
+uv tool install worklogs
+```
+
+Or with pip:
+
+```bash
 python -m pip install worklogs
 ```
 
-For local development:
+Install `workset` too if you want `worklogs` to create git worksets:
 
 ```bash
-uv sync --extra dev
-```
-
-Standard Python fallback:
-
-```bash
-python -m pip install -e ".[dev]"
+uv tool install workset
 ```
 
 ## Usage
@@ -35,76 +35,35 @@ Check the installed version:
 worklogs --version
 ```
 
-Create a plan with explicit fields:
+Create your first note:
 
 ```bash
-worklogs new --scope work --kind plan --project backend-api --slug improve-deploy-notes
+worklogs new first-note--note --scope personal
 ```
 
-Create the same plan with the fast filename-shaped token:
+Create a plan:
 
 ```bash
-worklogs new plan--backend-api--improve-deploy-notes --scope work
+worklogs new api-refactor--plan --scope work
 ```
 
-Plans create a linked companion execution note by default:
+Plans create a linked companion note by default:
 
 ```text
-HHMM--plan--backend-api--improve-deploy-notes.md
-HHMM--note--backend-api--improve-deploy-notes-execution-log.md
-```
-
-Create a standalone note:
-
-```bash
-worklogs new note--personal-site--theme-ideas --scope personal
+HHMM-Ha--api-refactor--plan.md
+HHMM-Ha--api-refactor--note.md
 ```
 
 Preview the generated paths and markdown without writing files:
 
 ```bash
-worklogs new plan--backend-api--improve-deploy-notes --scope work --dry-run
+worklogs new api-refactor--plan --scope work --dry-run
 ```
 
 Print created paths for scripts:
 
 ```bash
-worklogs new note--personal-site--theme-ideas --scope personal --print-path
-```
-
-Create a dated project workset directory:
-
-```bash
-worklogs workset new backend-api-refactor --worksets-root ~/worksets
-```
-
-Create a dated workset under organizer folders:
-
-```bash
-worklogs workset new release-tools/python-packaging/worklogs-0.2.1 \
-  --worksets-root ~/worksets
-```
-
-Worksets are created under:
-
-```text
-<worksets-root>/YYYY/MM-month/DD-ddd/<workset-path>/
-```
-
-Preview a workset path without creating it:
-
-```bash
-worklogs workset new release-tools/python-packaging/worklogs-0.2.1 \
-  --worksets-root ~/worksets \
-  --dry-run
-```
-
-Print only the created path for scripts:
-
-```bash
-worklogs workset new backend-api-refactor \
-  --worksets-root ~/worksets \
-  --print-path
+worklogs new first-note--note --scope personal --print-path
 ```
 
 Supported kinds:
@@ -114,6 +73,51 @@ plan
 note
 investigation
 codereview
+```
+
+## Worksets
+
+`worklogs` can create or attach a git workset through the `workset` package.
+Configure repo aliases in `~/.config/workset/repos.toml`:
+
+```toml
+[workset]
+root = "~/worksets"
+date_prefix = true
+timezone = "America/Toronto"
+
+[repos]
+api = "~/repos/api"
+web = "~/repos/web"
+```
+
+Create the plan first, then attach a workset:
+
+```bash
+worklogs new api-refactor--plan --scope work
+worklogs workset api-refactor api:feat/refactor
+```
+
+Or create the worklog and workset in one command:
+
+```bash
+worklogs new checkout-flow--plan --scope work \
+  --workset api:feat/checkout-flow \
+  --workset web:main
+```
+
+For a first successful zero-to-workset example:
+
+```bash
+git clone git@github.com:your-org/api.git ~/repos/api
+worklogs new api-refactor--plan --scope work
+worklogs workset api-refactor api:feat/refactor
+```
+
+Worksets are created under:
+
+```text
+<worksets-root>/YYYY/MM-month/DD-ddd/<workset-path>/
 ```
 
 ## Config
@@ -144,13 +148,13 @@ Resolution order:
 With `default_scope` configured, the fast path can omit `--scope`:
 
 ```bash
-worklogs new plan--backend-api--improve-deploy-notes
+worklogs new api-refactor--plan
 ```
 
 With `worksets_root` configured, the workset path can omit `--worksets-root`:
 
 ```bash
-worklogs workset new backend-api-refactor
+worklogs workset api-refactor api:feat/refactor
 ```
 
 For shorter personal shell usage, add a local alias:
@@ -211,9 +215,9 @@ Environment name: pypi
 Create a GitHub Release for the version in [`pyproject.toml`](pyproject.toml):
 
 ```bash
-gh release create v0.2.1 \
-  --title "v0.2.1" \
-  --notes "Add dated workset directory creation."
+gh release create v0.3.6 \
+  --title "v0.3.6" \
+  --notes "Clarify worklog and workset onboarding."
 ```
 
 Publishing is release-driven on purpose: normal pushes and pull requests build
